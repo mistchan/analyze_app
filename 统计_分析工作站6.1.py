@@ -268,6 +268,10 @@ def check_blue(each_im):
 
 
 def de_rep_im(dirt):
+    '''
+    文件夹内的png文件去重
+    dirt:需要去重的文件夹路径
+    '''
     list0 = []
 
     list1 = glob.glob(dirt + "\\*.png")
@@ -293,6 +297,40 @@ def de_rep_im(dirt):
             else:
                 t += 1
         m += 1
+
+
+def de_rpt_dirs(de_rep_dirt, tar_dirt):
+    '''
+    将de_rep_dirt里的png文件与tar_dirt比较，重复的删除。
+    de_rep_dirt:需要去重的文件夹路径
+    tar_dirt：目标文件夹路径
+    '''
+    list_tar_md5 = []
+    list_image_to_del = []
+
+    # 计算目标文件夹中每张图片的md5值，生成列表list_tar_md5
+    for each in glob.glob(tar_dirt + "\\*.png"):
+        hasho = md5()
+        img = open(each, "rb")
+        hasho.update(img.read())
+        img.close()
+
+        list_tar_md5.append(hasho.hexdigest())
+
+    # 比较
+    for each_de_im in glob.glob(de_rep_dirt + "\\*.png"):
+        hasho = md5()
+        img = open(each_de_im, "rb")
+        hasho.update(img.read())
+        img.close()
+        im_md5 = hasho.hexdigest()
+        if im_md5 in list_tar_md5:
+            list_image_to_del.append(each_de_im)
+    # 删除重复图片
+    for im_to_del in list_image_to_del:
+
+        os.remove(im_to_del)
+        print(time_now() + '已删除重复图片：', im_to_del)
 
 
 if __name__ == "__main__":
@@ -366,7 +404,8 @@ if __name__ == "__main__":
     print(time_now() + " 汇总所有结果图片到white_image_dir文件夹...")
     for blue_image in glob.glob(".\\blue_to_white_temp\\*.png"):
         shutil.copy(blue_image, ".\\white_image_dir")
-
+    for each_dir in glob.glob(".\\result_db\\*"):
+        de_rpt_dirs(".\\white_image_dir", each_dir)
     shutil.copytree(".\\white_image_dir", f".\\result_db\\{dir_name}")
     print(time_now() + " 第一阶段运行完毕...")
     speak = win32com.client.Dispatch("SAPI.SPVOICE")
