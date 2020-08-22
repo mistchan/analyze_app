@@ -422,6 +422,7 @@ if __name__ == "__main__":
             box2 = (250, 0, 299, 18)  # 用量
             box3 = (606, 0, 640, 18)  # 日
             box4 = (583, 0, 611, 18)  # 月
+            box5 = (0, 0, 128, 18)  # 月
 
             if not os.path.isdir(".\\im_cropped"):
                 os.makedirs(".\\im_cropped")
@@ -441,6 +442,8 @@ if __name__ == "__main__":
                 imday.save(".\\im_cropped\\day_" + str(n) + ".png")
                 imm = im_cell.crop(box4)
                 imm.save(".\\im_cropped\\month_" + str(n) + ".png")
+                im_drug = im_cell.crop(box5)
+                im_drug.save(".\\im_cropped\\drug_" + str(n) + ".png")
                 n += 1
 
             de_rep_im(".\\im_cropped")
