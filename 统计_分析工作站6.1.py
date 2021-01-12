@@ -22,10 +22,10 @@ import time
 import tkinter
 import tkinter.filedialog
 import tkinter.messagebox
-import winsound
+# import winsound
 import pandas as pd
 import pyautogui
-import win32com.client
+# import win32com.client
 import multiprocessing as mp
 from PIL import Image
 from hashlib import md5
@@ -172,16 +172,16 @@ def time_now():
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
 
-def recognize(screen_shot_im):
+def recognize(screen_shot_im, department):
     n_im = 1
-    for targ_im in glob.glob(".\\targartimage\\*.png"):
+    for targ_im in glob.glob(f".\\targartimage\\{department}\\*.png"):
 
         im = Image.open(targ_im)
 
         im_b = Image.open(screen_shot_im)
         # im_bx, im_by = im_b.size
         llist = list(
-            pyautogui.locateAll(im, im_b, grayscale=True, region=(168, 160, 181, 497))
+            pyautogui.locateAll(im, im_b, grayscale=True, region=(168, 160, 181, 650))
         )  # 1366 x 768 分辨率下 所有匹配图像的坐标生成列表
         if llist:
 
@@ -212,20 +212,20 @@ def recognize(screen_shot_im):
                 n_im += 1
 
 
-def im_to_str(tal_im_dir, q):
+def im_to_str(tal_im_dir, department, q):
     target_im_opened = Image.open(tal_im_dir)
 
     im_str = []
 
     for cell_im_dir_name in [
-        ("drug", (0, 0, 130, 18)),
+        ("drug", (0, 0, 170, 18)),
         ("doc", (495, 0, 60, 18)),
         ("dot", (250, 0, 60, 18)),
         ("month", (580, 0, 45, 18)),
         ("day", (605, 0, 40, 18)),
     ]:
 
-        for cell_im in glob.glob(f"./cell_im_dir/{cell_im_dir_name[0]}/*.png"):
+        for cell_im in glob.glob(f"./cell_im_dir/{cell_im_dir_name[0]}/{department}/*.png"):
             cell_im_opened = Image.open(cell_im)
             if pyautogui.locate(
                     cell_im_opened, target_im_opened, region=(cell_im_dir_name[1])
@@ -334,86 +334,103 @@ def de_rpt_dirs(de_rep_dirt, tar_dirt):
 
 
 if __name__ == "__main__":
+    ask_which_department = pyautogui.confirm(
+        title="请选择：", text="选择哪条线", buttons=["心血管线", "消化线"]
+    )
+    if not ask_which_department:
+        sys.exit(0)
+    department_to_check = ask_which_department
+    print(department_to_check)
+    ask_if_skip = pyautogui.confirm(
+        title="请选择：", text="如何运行程序", buttons=["运行第一步分析程序", "直接运行第二步", "退出"]
+    )
+    if ask_if_skip == "退出" or not ask_if_skip:
+        sys.exit(0)
+    elif ask_if_skip == "运行第一步分析程序":
+        root1 = tkinter.Tk()
+        app = AskDir(root1)
+        root1.mainloop()
+        dir_list_all = path_fit(app.dir_im, app.dir_name)
+        year_to_check = int(app.year_to_check)
 
-    root1 = tkinter.Tk()
-    app = AskDir(root1)
-    root1.mainloop()
-    dir_list_all = path_fit(app.dir_im, app.dir_name)
-    year_to_check = int(app.year_to_check)
+        # month_to_check_list = app.month_to_check.split(",")
+        month_to_check = app.month_to_check
+        name_index_w = 0
+        make_dir(dir_list_temp)
 
-    month_to_check_list = app.month_to_check.split(",")
-    month_to_check = app.month_to_check
-    name_index_w = 0
-    make_dir(dir_list_temp)
+        dir_name = "".join(re.split(r"-|:", str(time_now())))
 
-    dir_name = "".join(re.split(r"-|:", str(time_now())))
+        print(time_now() + " 开始运行...")
 
-    print(time_now() + " 开始运行...")
+        print(time_now() + " 识别所有截图生成小图片...")
+        pool2 = mp.Pool(processes=11)
 
-    print(time_now() + " 识别所有截图生成小图片...")
-    pool2 = mp.Pool(processes=11)
+        for each_fit_path in dir_list_all:
+            for each_screen_shot_im in glob.glob(each_fit_path + "\\*.png"):
+                pool2.apply_async(recognize, (each_screen_shot_im, department_to_check))
 
-    for each_fit_path in dir_list_all:
-        for each_screen_shot_im in glob.glob(each_fit_path + "\\*.png"):
-            pool2.apply_async(recognize, (each_screen_shot_im,))
+        pool2.close()
+        pool2.join()
 
-    pool2.close()
-    pool2.join()
+        # 根据生成的小图片开始汇总分析
+        print(time_now() + " 根据小图片颜色分类整理...")
+        for eld_file in glob.glob(".\\results\\done\\*.png"):
+            shutil.copyfile(eld_file, ".\\result\\" + str(eld_file.split(os.sep)[-1]))
+        for old_file in glob.glob(".\\result\\*.png"):
+            im_judge = Image.open(old_file)
+            if im_judge.getpixel((0, 0)) == (0, 0, 128):
+                shutil.copyfile(
+                    old_file,
+                    ".\\blue_image_dir\\"
+                    + os.path.basename(old_file).rstrip(".png")
+                    + "_blue"
+                    + str(name_index_w)
+                    + ".png",
+                )
+                name_index_w += 1
+            else:
+                shutil.copyfile(
+                    old_file,
+                    ".\\white_image_dir\\"
+                    + os.path.basename(old_file).rstrip(".png")
+                    + "_white"
+                    + str(name_index_w)
+                    + ".png",
+                )
+                name_index_w += 1
+        print(time_now() + " 图片去重...")
 
-    # 根据生成的小图片开始汇总分析
-    print(time_now() + " 根据小图片颜色分类整理...")
-    for eld_file in glob.glob(".\\results\\done\\*.png"):
-        shutil.copyfile(eld_file, ".\\result\\" + str(eld_file.split(os.sep)[-1]))
-    for old_file in glob.glob(".\\result\\*.png"):
-        im_judge = Image.open(old_file)
-        if im_judge.getpixel((0, 0)) == (0, 0, 128):
-            shutil.copyfile(
-                old_file,
-                ".\\blue_image_dir\\"
-                + os.path.basename(old_file).rstrip(".png")
-                + "_blue"
-                + str(name_index_w)
-                + ".png",
-            )
-            name_index_w += 1
-        else:
-            shutil.copyfile(
-                old_file,
-                ".\\white_image_dir\\"
-                + os.path.basename(old_file).rstrip(".png")
-                + "_white"
-                + str(name_index_w)
-                + ".png",
-            )
-            name_index_w += 1
-    print(time_now() + " 图片去重...")
+        de_rep_im("blue_image_dir")
+        print(time_now() + " 图片去重已完成1/2...")
+        de_rep_im("white_image_dir")
+        print(time_now() + " 图片去重已完成2/2...")
+        print(time_now() + " 交叉对比两组图片并删除重复项...")
 
-    de_rep_im("blue_image_dir")
-    print(time_now() + " 图片去重已完成1/2...")
-    de_rep_im("white_image_dir")
-    print(time_now() + " 图片去重已完成2/2...")
-    print(time_now() + " 交叉对比两组图片并删除重复项...")
+        pool3 = mp.Pool(processes=11)
+        for each_blue_im in glob.glob(".\\blue_image_dir\\*.png"):
+            pool3.apply_async(check_blue, (each_blue_im,))
 
-    pool3 = mp.Pool(processes=11)
-    for each_blue_im in glob.glob(".\\blue_image_dir\\*.png"):
-        pool3.apply_async(check_blue, (each_blue_im,))
+        pool3.close()
+        pool3.join()
 
-    pool3.close()
-    pool3.join()
-
-    print(time_now() + " 汇总所有结果图片到white_image_dir文件夹...")
-    for blue_image in glob.glob(".\\blue_to_white_temp\\*.png"):
-        shutil.copy(blue_image, ".\\white_image_dir")
-    for each_dir in glob.glob(".\\result_db\\*"):
-        de_rpt_dirs(".\\white_image_dir", each_dir)
-    shutil.copytree(".\\white_image_dir", f".\\result_db\\{dir_name}")
-    print(time_now() + " 第一阶段运行完毕...")
-    speak = win32com.client.Dispatch("SAPI.SPVOICE")
-    winsound.Beep(2019, 5000)
-    speak.Speak("请选择是否运行cell image生成程序，或跳过程序、继续下一步分析")
+        print(time_now() + " 汇总所有结果图片到white_image_dir文件夹...")
+        for blue_image in glob.glob(".\\blue_to_white_temp\\*.png"):
+            shutil.copy(blue_image, ".\\white_image_dir")
+        for each_dir in glob.glob(".\\result_db\\*"):
+            de_rpt_dirs(".\\white_image_dir", each_dir)
+        shutil.copytree(".\\white_image_dir", f".\\result_db\\{dir_name}")
+        print(time_now() + " 第一阶段运行完毕...")
+        # speak = win32com.client.Dispatch("SAPI.SPVOICE")
+        # winsound.Beep(2019, 5000)
+        # speak.Speak("请选择是否运行cell image生成程序，或跳过程序、继续下一步分析")
+    else:
+        dir_name = os.listdir(".\\result_db")[-1]
+        year_to_check = 're' + time.strftime("%Y", time.localtime())
+        month_to_check = time.strftime("%m%d%H%M", time.localtime())
 
     while True:
-        speak.Speak("请选择下一步执行程序")
+        # speak = win32com.client.Dispatch("SAPI.SPVOICE")
+        # speak.Speak("请选择下一步执行程序")
         ask_if = pyautogui.confirm(
             title="请选择：", text="是否运行程序补充生成小图", buttons=["运行程序", "不运行程序继续", "结束程序并储存"]
         )
@@ -422,7 +439,7 @@ if __name__ == "__main__":
             box2 = (250, 0, 299, 18)  # 用量
             box3 = (606, 0, 640, 18)  # 日
             box4 = (583, 0, 611, 18)  # 月
-            box5 = (0, 0, 128, 18)  # 月
+            box5 = (0, 0, 170, 18)  # 药名
 
             if not os.path.isdir(".\\im_cropped"):
                 os.makedirs(".\\im_cropped")
@@ -455,7 +472,7 @@ if __name__ == "__main__":
             pool = mp.Pool(processes=11)
 
             for i in glob.glob(f".\\result_db\\{dir_name}\\*.png"):
-                pool.apply_async(im_to_str, (i, q))
+                pool.apply_async(im_to_str, (i,department_to_check, q))
 
             pool.close()
             pool.join()
@@ -467,6 +484,7 @@ if __name__ == "__main__":
                     break
             print(time_now() + " 汇总信息、清洗并储存...")
             xl = pd.DataFrame(result_im_to_str)
+
             if os.path.exists(
                     f".\\excel_folder\\result_{year_to_check}_{month_to_check}.xlsx"
             ):
@@ -481,9 +499,12 @@ if __name__ == "__main__":
             writer = pd.ExcelWriter(
                 f".\\excel_folder\\result_{year_to_check}_{month_to_check}.xlsx"
             )
+
+
             xl.to_excel(
                 writer,
                 index=False,
+
                 header=["drug", "doc", "amount", "month", "day", "file_path"],
                 sheet_name="元数据",
             )
@@ -496,49 +517,39 @@ if __name__ == "__main__":
 
             df["date"] = (
                     "2020-"
-                    + df["month"].astype("str").str.rjust(2, "0")
+                    + df["month"].astype("str").str.rjust(2, "0").copy()
                     + "-"
                     + df["day"].astype("str").str.rjust(2, "0").copy()
             )
-            df["amount_justed"] = df["amount"].copy()
-
-            # def conv(x):
-            #     temp = x.split('.')
-            #     if int(temp[1]) > 5:
-            #         return '2019' + temp[1] + temp[2]
-            #     else:
-            #         return '2020' + temp[1] + temp[2]
-
-            # df['日期'] = pd.to_datetime(df['日期'].copy().apply(conv), format='%Y%m%d')
-
-            # dfo = df
-            #
-            #
-            # def set_month(month_list):
-            #     codes = ""
-            #     for i in month_list:
-            #         codes += f"(dfo['月'] == int({i}))|"
-            #
-            #     codes = codes.rstrip('|')
-            #     return codes
-            # code_ = set_month(month_to_check_list)
-            # dfo = dfo[eval(code_)]
-            # dfo = dfo.reset_index()
-            # dfo = dfo.drop('index', axis=1)
-            df.loc[df["drug"].str.startswith("替吉奥"), "amount_justed"] = df.loc[
-                df["drug"].str.startswith("替吉奥"), "amount_justed"
-            ].apply(
-                lambda x: x // 28
-                if not x % 28
-                else (
-                    x // 36
-                    if not x % 36
-                    else (x // 42 if not x % 42 else (x if x < 10 else 0))
-                )
+            df["date"] = df["date"].copy().apply(
+                lambda x: x if (int(x.split('-')[1]) > 5) else f"2021-{x.split('-')[1]}-{x.split('-')[2]}"
             )
-            df.loc[df["drug"].str.startswith("卡培他滨"), "amount_justed"] = df.loc[
-                df["drug"].str.startswith("卡培他滨"), "amount_justed"
-            ].apply(lambda x: x // 12 if (not x % 12 and x > 12) else x)
+            # 心血管线加入
+            if department_to_check == '心血管线':
+
+                df["amount_justed"] = df["amount"].copy().apply(lambda x: 1 if (x < 1) else x)
+                df["amount_justed"] = df["amount"].copy().apply(lambda x: int(10*x//10) if (10*x % 10 == 0) else int(10*x//10+1))
+            else:
+
+                # 消化线加入
+
+                df["amount_justed"] = df["amount"].copy()
+                df.loc[df["drug"].str.startswith("替吉奥"), "amount_justed"] = df.loc[
+                    df["drug"].str.startswith("替吉奥"), "amount_justed"
+                ].apply(
+                    lambda x: x // 28
+                    if not x % 28
+                    else (
+                        x // 36
+                        if not x % 36
+                        else (x // 42 if not x % 42 else (x if x < 10 else 0))
+                    )
+                )
+                df.loc[df["drug"].str.startswith("卡培他滨"), "amount_justed"] = df.loc[
+                    df["drug"].str.startswith("卡培他滨"), "amount_justed"
+                ].apply(lambda x: x // 12 if (not x % 12 and x >= 12) else x)
+
+
             df["justed_flag"] = df["amount_justed"] != df["amount"]
             df = df.reset_index()
             df = df.drop("index", axis=1)
@@ -546,7 +557,7 @@ if __name__ == "__main__":
             df.to_excel(writer, sheet_name="数据清洗")
             # dfo.to_excel(writer, sheet_name='数据清洗')
             df.to_json(
-                f".\\df_to_json\\result_{year_to_check}_{month_to_check}.json",
+                f".\\df_to_json\\{year_to_check}_{month_to_check}_{time.strftime('%y%m%d%H%M', time.localtime())}.json",
                 orient="index",
                 force_ascii=False,
             )
@@ -561,13 +572,15 @@ if __name__ == "__main__":
             )
 
         else:
-            print(time_now() + " 已储存，运行结束！")
+            print(
+                time_now() +
+                f" 已储存，运行结束！json文件为E:\\drug_quire\\static\\json_update\\{year_to_check}_{month_to_check}_{time.strftime('%y%m%d%H%M', time.localtime())}.json")
             df.to_json(
-                f"E:\\drug_quire\\json_update\\result_{year_to_check}_{month_to_check}.json",
+                f"E:\\drug_quire\\static\\json_update\\{year_to_check}_{month_to_check}_{time.strftime('%y%m%d%H%M', time.localtime())}.json",
                 orient="index",
                 force_ascii=False,
             )
 
             break
-        winsound.Beep(2019, 3000)
-        speak.Speak("您选择的" + str(ask_if) + "已运行完成。请查看运行结果")
+        # winsound.Beep(2019, 3000)
+        # speak.Speak("您选择的" + str(ask_if) + "已运行完成。请查看运行结果")
